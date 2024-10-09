@@ -1,0 +1,17 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: "postgres"
+    container_name: postgres1
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: docker
+      POSTGRES_DB: prisma
+    ports:
+      - "5433:5432"
+    volumes:
+      - database:/var/lib/postgresql/data
+
+volumes:
+  database:
