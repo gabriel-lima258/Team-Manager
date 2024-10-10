@@ -1,54 +1,50 @@
 import { Handler } from "express"
-import { prisma } from "../database"
-import { Prisma } from "@prisma/client"
 import { GetLeadsRequestSchema } from "./schemas/LeadsRequestSchema"
 import { AddLeadRequestSchema } from "./schemas/CampaignsRequestSchema"
+import { GroupsRepository } from "../repositories/GroupsRepository"
+import { LeadsRepository, LeadWhereParams } from "../repositories/LeadsRepository"
 
 export class GroupLeadsController {
+  private groupsRepository: GroupsRepository
+  private leadsRepository: LeadsRepository
+
+  constructor(groupsRepository: GroupsRepository, leadsRepository: LeadsRepository) {
+    this.groupsRepository = groupsRepository;
+    this.leadsRepository = leadsRepository
+  }
+
   getLeads: Handler = async (req, res, next) => {
     try {
       const groupId = Number(req.params.groupId)
       const query = GetLeadsRequestSchema.parse(req.query)
-      const { 
-        page = '1',
-        pageSize = '10',
-        name,
-        status,
-        sortBy = "name", 
-        order = "asc" 
-      } = query
+      const { page = "1", pageSize = "10", name, status, sortBy = "name", order = "asc" } = query
 
-      const pageNumber = Number(page)
-      const pageSizeNumber = Number(pageSize)
+      const limit = Number(pageSize)
+      const offset = (Number(page) - 1) * limit
 
-      const where: Prisma.LeadWhereInput = {
-        groups: { // filter by campaign id of lead
-          some: { id: groupId } // some campaign id of lead, don't need to be for every campaign
-        }
-      }
+      const where: LeadWhereParams = { groupId }
 
-      if (name) where.name = { contains: name, mode: "insensitive" }
+      if (name) where.name = { like: name, mode: "insensitive" }
       if (status) where.status = status
 
-      const leads = await prisma.lead.findMany({
+      const leads = await this.leadsRepository.find({
         where,
-        orderBy: { [sortBy]: order },
-        skip: (pageNumber - 1) * pageSizeNumber,
-        take: pageSizeNumber,
-        include: {
-          groups: true
-        }
+        sortBy,
+        order,
+        limit,
+        offset,
+        include: { groups: true}
       })
 
-      const total = await prisma.lead.count({ where })
-      
+      const total = await this.leadsRepository.count(where)
+
       res.json({
         leads,
         meta: {
-          page: pageNumber,
-          pageSize: pageSizeNumber,
+          page: Number(page),
+          pageSize: limit,
           total,
-          totalPages: Math.ceil(total / pageSizeNumber)
+          totalPages: Math.ceil(total / limit)
         }
       })
     } catch (error) {
@@ -58,20 +54,10 @@ export class GroupLeadsController {
 
   addLead: Handler = async (req, res, next) => {
     try {
-      const body = AddLeadRequestSchema.parse(req.body)
+      const groupId = Number(req.params.groupId);
+      const { leadId } = AddLeadRequestSchema.parse(req.body)
 
-      const updatedGroup = await prisma.group.update({
-        data: {
-          leads: {
-            // connect to a existing lead
-            connect: { id: body.leadId }
-          }
-        },
-        where: {
-          id: Number(req.params.groupId)
-        },
-        include: { leads: true }
-      })
+      const updatedGroup = this.groupsRepository.addLead(groupId, leadId)
       res.json(201).end(updatedGroup)
     } catch (error) {
       next(error);
@@ -80,18 +66,9 @@ export class GroupLeadsController {
 
   removeLead: Handler = async (req, res, next) => {
     try {
-      const deletedGroup = await prisma.group.update({
-        data: {
-          leads: {
-            // disconnect of a existing lead
-            disconnect: { id: Number(req.params.leadId) }
-          }
-        },
-        where: {
-          id: Number(req.params.groupId)
-        },
-        include: { leads: true }
-      })
+      const groupId = Number(req.params.groupId)
+      const leadId = Number(req.params.leadId)
+      const deletedGroup = await this.groupsRepository.removeLead(groupId, leadId)
       res.json(deletedGroup)
     } catch (error) {
       next(error);
