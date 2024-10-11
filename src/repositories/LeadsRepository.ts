@@ -1,4 +1,5 @@
 import { Lead } from "@prisma/client";
+import { LeadCampaignStatus } from "./CampaignsRepository";
 
 export type LeadStatus = "New" | "Contacted" | "Qualified" | "Converted" | "Unresponsive" | "Disqualified" | "Archived"
 
@@ -9,7 +10,9 @@ export interface LeadWhereParams {
     mode?: "default" | "insensitive"
   }
   status?: LeadStatus
+  campaignStatus?: LeadCampaignStatus
   groupId?: number
+  campaignId?: number
 }
 
 export interface FindLeadsParams {
